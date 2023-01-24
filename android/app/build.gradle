@@ -1,0 +1,248 @@
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterRoot = localProperties.getProperty('flutter.sdk')
+if (flutterRoot == null) {
+    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
+}
+
+apply plugin: 'com.android.application'
+apply from: 'secure.properties'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-kapt'
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation 'androidx.annotation:annotation:1.5.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0-alpha01'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.fragment:fragment:1.5.5'
+
+    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.5.1'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.5.1'
+    implementation 'androidx.preference:preference:1.2.0'
+    implementation 'androidx.recyclerview:recyclerview:1.2.1'
+    implementation 'androidx.work:work-runtime:2.7.1'
+    implementation 'com.google.android.material:material:1.9.0-alpha01'
+    implementation 'com.google.code.gson:gson:2.10'
+    implementation 'com.timehop.stickyheadersrecyclerview:library:0.4.3@aar'
+    implementation 'com.github.devnullorthrow:MPAndroidChart:3.2.0-alpha'
+    implementation 'net.jcip:jcip-annotations:1.0'
+    implementation 'com.google.code.gson:gson:2.10'
+
+    // Test Dependencies
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.mockito:mockito-core:4.9.0'
+    testImplementation 'org.mockito:mockito-inline:4.9.0'
+}
+
+project.ext.appId = 'com.mapmetrics'
+project.ext.appName = 'Map Demo'
+
+android {
+    namespace "com.mapmetrics.orgmaps"
+    buildFeatures {
+        dataBinding = true
+    }
+
+    compileSdkVersion 33
+    ndkVersion '25.1.8937393'
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    defaultConfig {
+        applicationId "com.mapmetrics.orgmaps"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-build-configuration.
+        minSdkVersion 23
+        targetSdkVersion 33
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+
+        buildConfigField 'String', 'SUPPORT_MAIL', '"android@organicmaps.app"'
+        // Should be customized in flavors.
+        buildConfigField 'String', 'REVIEW_URL', '""'
+
+        resConfigs project.ext.supportedLocalizations
+
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        }
+
+        multiDexEnabled true
+        multiDexKeepFile file('multidex-config.txt')
+
+        setProperty("archivesBaseName", appName.replaceAll("\\s","") + "-" + defaultConfig.versionCode)
+    }
+
+    // buildTypes {
+    //     release {
+    //         // TODO: Add your own signing config for the release build.
+    //         // Signing with the debug keys for now, so `flutter run --release` works.
+    //         signingConfig signingConfigs.debug
+    //     }
+    // }
+
+    sourceSets.main {
+        manifest.srcFile 'src/main/AndroidManifest.xml'
+        res.srcDirs = ['src/main/res']
+        java.srcDirs = ['src/main/java']
+        java.srcDirs += 'src/main/kotlin'
+        java.srcDirs += 'flavors/gms-disabled'
+        java.srcDirs += 'flavors/firebase-disabled'
+        assets.srcDirs += ['assets']
+    }
+
+    sourceSets.test {
+        java.srcDirs = ['tests/java']
+        res.srcDirs = ['tests/resources']
+    }
+
+    flavorDimensions 'default'
+
+    splits.abi {
+        boolean enabled = project.hasProperty('splitApk')
+        println ("Create separate apks: " + enabled)
+        enable enabled
+        reset()
+        include 'x86', 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        universalApk true
+    }
+
+    lint {
+        disable 'MissingTranslation'
+        // https://github.com/organicmaps/organicmaps/issues/3551
+        disable 'MissingQuantity', 'UnusedQuantity'
+        // https://github.com/organicmaps/organicmaps/issues/3550
+        disable 'ByteOrderMark'
+        // https://github.com/organicmaps/organicmaps/issues/1077
+        disable 'CustomSplashScreen'
+        // https://github.com/organicmaps/organicmaps/issues/3610
+        disable 'InsecureBaseConfiguration'
+        // https://github.com/organicmaps/organicmaps/issues/3608
+        disable 'UnusedResources'
+        abortOnError true
+    }
+
+    gradle.projectsEvaluated {
+        android.applicationVariants.all { variant ->
+            def task = variant.name.capitalize()
+            project.task(type: Exec, "run${task}", dependsOn: "install${task}") {
+                // TODO: Revisit this
+                commandLine android.getAdbExe(), 'shell', 'am', 'start', '-n', "${applicationId}/app.organicmaps.SplashActivity"
+            }
+        }
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword '12345678'
+            keyAlias 'debug'
+            keyPassword '12345678'
+        }
+
+        release {
+            storeFile file(spropStoreFile)
+            storePassword spropStorePassword
+            keyAlias spropKeyAlias
+            keyPassword spropKeyPassword
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'   // Allows to install debug and release builds together
+            versionNameSuffix '-debug'
+            jniDebuggable true           // Enable jni debug build
+            zipAlignEnabled true
+            signingConfig signingConfigs.debug
+            resValue 'string', 'app_id', android.defaultConfig.applicationId + applicationIdSuffix
+            resValue 'string', 'app_name', project.ext.appName  + ' ' + '(Debug)'
+            // Do not generate separate debug symbols for debug apps, because we don't distribute them.
+            ndk.debugSymbolLevel = 'none'
+        }
+
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            // Includes the default ProGuard rules files that are packaged with the Android Gradle plugin.
+            // To learn more, go to the documentation section about R8 configuration files.
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-mwm.txt'
+            resValue 'string', 'app_id', android.defaultConfig.applicationId
+            resValue 'string', 'app_name', project.ext.appName
+            // Full size symbols are too big for Google, 217mb aab vs 95mb.
+            ndk.debugSymbolLevel = 'symbol_table'
+        }
+    }
+
+    // We don't compress these extensions in assets/ because our random FileReader can't read zip-compressed files from apk.
+    // TODO: Load all minor files via separate call to ReadAsString which can correctly handle compressed files in zip containers.
+    androidResources {
+        ignoreAssetsPattern '!.svn:!.git:!.DS_Store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        noCompress 'txt', 'bin', 'html', 'png', 'json', 'mwm', 'ttf', 'sdf', 'ui', 'config', 'csv', 'spv'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    packagingOptions.jniLibs {
+        excludes += [
+            'lib/**/libVkLayer_khronos_validation.so',
+            'lib/**/libVkLayer_core_validation.so',
+            'lib/**/libVkLayer_threading.so',
+            'lib/**/libVkLayer_image.so',
+            'lib/**/libVkLayer_parameter_validation.so',
+            'lib/**/libVkLayer_object_tracker.so',
+            'lib/**/libVkLayer_swapchain.so',
+            'lib/**/libVkLayer_unique_objects.so',
+        ]
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            path "jni/Android.mk"
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+tasks.withType(JavaCompile) {
+  options.compilerArgs << '-Xlint:unchecked' << '-Xlint:deprecation'
+}
+
+android.buildTypes.all { buildType ->
+  def suffix = applicationIdSuffix != null ? applicationIdSuffix : ""
+  def authorityValue = android.defaultConfig.applicationId + suffix + ".provider"
+  def authority = "\"" + authorityValue + "\""
+  buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', authority
+  manifestPlaceholders += [FILE_PROVIDER_PLACEHOLDER : authorityValue]
+}
